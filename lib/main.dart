@@ -5,7 +5,6 @@ import 'widgets/counter_card.dart';
 import 'widgets/add_counter_dialog.dart';
 import 'services/database_service.dart';
 import 'services/settings_service.dart';
-import 'widgets/counter_pie_chart.dart';
 import 'services/export_import_service.dart';
 import 'pages/image_page.dart';
 import 'package:flutter/foundation.dart';
