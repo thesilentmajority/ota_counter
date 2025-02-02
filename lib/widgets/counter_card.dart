@@ -18,121 +18,209 @@ class CounterCard extends StatelessWidget {
     required this.onEdit,
   });
 
+  // 判断颜色是否为深色
+  bool _isDarkColor(Color color) {
+    return color.computeLuminance() < 0.5;
+  }
+
+  // 获取文本颜色
+  Color _getTextColor(Color backgroundColor) {
+    return _isDarkColor(backgroundColor) 
+        ? Colors.white.withOpacity(0.9)
+        : Colors.black87;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(15),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: counter.colorValue.withAlpha(179),
-              borderRadius: BorderRadius.circular(15),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withAlpha(26),
-                  blurRadius: 10,
-                  spreadRadius: 1,
-                ),
-              ],
-            ),
-            child: Stack(
-              children: [
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit, size: 20),
-                        onPressed: onEdit,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        color: Colors.black54,
-                      ),
-                      const SizedBox(width: 4),
-                      IconButton(
-                        icon: const Icon(Icons.delete, size: 20),
-                        onPressed: onDelete,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        color: Colors.black54,
-                      ),
-                    ],
-                  ),
-                ),
-                Center(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      // 计算合适的字体大小
-                      final numberStr = counter.count.toString();
-                      final maxWidth = constraints.maxWidth * 0.8;
-                      final maxHeight = constraints.maxHeight * 0.4;
-                      
-                      // 根据容器大小计算基础字体大小
-                      double fontSize = (maxHeight * 0.8).clamp(20.0, 48.0);
-                      
-                      // 根据数字长度调整字体大小
-                      if (numberStr.length > 3) {
-                        fontSize *= (3 / numberStr.length);
-                      }
-                      
-                      // 确保百分比和名称的字体大小也随容器大小变化
-                      final percentageFontSize = (maxHeight * 0.15).clamp(12.0, 18.0);
-                      final nameFontSize = (maxHeight * 0.18).clamp(14.0, 20.0);
-                      
-                      return Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Container(
-                              constraints: BoxConstraints(
-                                maxWidth: maxWidth,
-                                maxHeight: maxHeight,
-                              ),
-                              child: Text(
-                                numberStr,
-                                style: TextStyle(
-                                  fontSize: fontSize,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black87,
+    final cardColor = counter.colorValue;
+    final textColor = _getTextColor(cardColor);
+    final secondaryTextColor = textColor.withOpacity(0.7);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final totalHeight = constraints.maxHeight;
+        final buttonHeight = (totalHeight * 0.12).clamp(24.0, 36.0);
+        final buttonIconSize = (buttonHeight * 0.5).clamp(14.0, 18.0);
+        final buttonPadding = (buttonHeight * 0.15).clamp(4.0, 6.0);
+        
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Expanded(
+              child: RepaintBoundary(
+                child: GestureDetector(
+                  onTap: onTap,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: cardColor.withOpacity(0.9),
+                      borderRadius: BorderRadius.circular(15),
+                      boxShadow: [
+                        BoxShadow(
+                          color: cardColor.withOpacity(0.3),
+                          blurRadius: 8,
+                          spreadRadius: 0.5,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          // 将容器高度分成三份，分别给数字、百分比和名称
+                          final containerHeight = constraints.maxHeight;
+                          final numberHeight = containerHeight * 0.5;  // 数字占50%
+                          final percentageHeight = containerHeight * 0.25;  // 百分比占25%
+                          final nameHeight = containerHeight * 0.25;  // 名称占25%
+
+                          // 计算字体大小
+                          final numberStr = counter.count.toString();
+                          final numberSize = (numberHeight * 0.6).clamp(20.0, 48.0);
+                          final adjustedNumberSize = numberStr.length > 3 
+                              ? numberSize * (3 / numberStr.length)
+                              : numberSize;
+                          final percentageSize = (percentageHeight * 0.5).clamp(12.0, 16.0);
+                          final nameSize = (nameHeight * 0.5).clamp(14.0, 18.0);
+
+                          return Column(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              SizedBox(
+                                height: numberHeight,
+                                child: Center(
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(
+                                      numberStr,
+                                      style: TextStyle(
+                                        fontSize: adjustedNumberSize,
+                                        fontWeight: FontWeight.bold,
+                                        color: textColor,
+                                      ),
+                                    ),
+                                  ),
                                 ),
-                                textAlign: TextAlign.center,
                               ),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${(percentage * 100).toStringAsFixed(1)}%',
-                            style: TextStyle(
-                              fontSize: percentageFontSize,
-                              color: Colors.black54,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            counter.name,
-                            style: TextStyle(
-                              fontSize: nameFontSize,
-                              color: Colors.black87,
-                              fontWeight: FontWeight.w500,
-                            ),
-                            textAlign: TextAlign.center,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      );
-                    },
+                              SizedBox(
+                                height: percentageHeight,
+                                child: Center(
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(
+                                      '${(percentage * 100).toStringAsFixed(1)}%',
+                                      style: TextStyle(
+                                        fontSize: percentageSize,
+                                        color: secondaryTextColor,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              SizedBox(
+                                height: nameHeight,
+                                child: Center(
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(
+                                      counter.name,
+                                      style: TextStyle(
+                                        fontSize: nameSize,
+                                        color: textColor,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                      maxLines: 1,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
                   ),
                 ),
-              ],
+              ),
+            ),
+            SizedBox(height: buttonPadding),
+            SizedBox(
+              height: buttonHeight,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _ActionButton(
+                    icon: Icons.edit,
+                    onPressed: onEdit,
+                    color: cardColor,
+                    textColor: textColor,
+                    size: buttonHeight,
+                    iconSize: buttonIconSize,
+                    padding: buttonPadding,
+                  ),
+                  SizedBox(width: buttonPadding * 2),
+                  _ActionButton(
+                    icon: Icons.delete,
+                    onPressed: onDelete,
+                    color: cardColor,
+                    textColor: textColor,
+                    size: buttonHeight,
+                    iconSize: buttonIconSize,
+                    padding: buttonPadding,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ActionButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onPressed;
+  final Color color;
+  final Color textColor;
+  final double size;
+  final double iconSize;
+  final double padding;
+
+  const _ActionButton({
+    required this.icon,
+    required this.onPressed,
+    required this.color,
+    required this.textColor,
+    required this.size,
+    required this.iconSize,
+    required this.padding,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(size / 2),
+          child: Container(
+            padding: EdgeInsets.all(padding),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(size / 2),
+            ),
+            child: Icon(
+              icon,
+              size: iconSize,
+              color: textColor.withOpacity(0.8),
             ),
           ),
         ),

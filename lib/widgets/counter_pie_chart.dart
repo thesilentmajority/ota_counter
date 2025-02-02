@@ -5,11 +5,13 @@ import '../models/counter_model.dart';
 class CounterPieChart extends StatefulWidget {
   final List<CounterModel> counters;
   final int total;
+  final bool showLegend;  // 添加控制图例显示的参数
 
   const CounterPieChart({
     super.key,
     required this.counters,
     required this.total,
+    this.showLegend = true,  // 默认显示图例
   });
 
   @override
@@ -26,65 +28,70 @@ class _CounterPieChartState extends State<CounterPieChart> {
     }
 
     // 获取屏幕尺寸
-    final size = MediaQuery.of(context).size;
-    final chartSize = size.width * 0.8; // 图表宽度为屏幕宽度的80%
-    final maxHeight = size.height * 0.6; // 最大高度为屏幕高度的60%
-    final chartHeight = chartSize < maxHeight ? chartSize : maxHeight;
+    final screenSize = MediaQuery.of(context).size;
+    final isPortrait = screenSize.height > screenSize.width;
+    
+    // 使用父组件传入的尺寸，或者使用默认计算
+    final chartSize = isPortrait 
+        ? screenSize.width * 0.9  // 增大到90%
+        : screenSize.height * 0.7;  // 增大到70%
 
     return SingleChildScrollView(
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(
-                height: chartHeight,
-                child: PieChart(
-                  PieChartData(
-                    pieTouchData: PieTouchData(
-                      touchCallback: (FlTouchEvent event, pieTouchResponse) {
-                        setState(() {
-                          if (!event.isInterestedForInteractions ||
-                              pieTouchResponse == null ||
-                              pieTouchResponse.touchedSection == null) {
-                            _touchedIndex = -1;
-                            return;
-                          }
-                          _touchedIndex = pieTouchResponse.touchedSection!.touchedSectionIndex;
-                        });
-                      },
-                    ),
-                    borderData: FlBorderData(show: false),
-                    sectionsSpace: 2,
-                    centerSpaceRadius: chartHeight * 0.1, // 中心空白区域大小随图表大小变化
-                    sections: _buildSections(chartHeight),
-                  ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            height: chartSize,
+            width: chartSize,
+            child: PieChart(
+              PieChartData(
+                pieTouchData: PieTouchData(
+                  touchCallback: (FlTouchEvent event, pieTouchResponse) {
+                    setState(() {
+                      if (!event.isInterestedForInteractions ||
+                          pieTouchResponse == null ||
+                          pieTouchResponse.touchedSection == null) {
+                        _touchedIndex = -1;
+                        return;
+                      }
+                      _touchedIndex = pieTouchResponse.touchedSection!.touchedSectionIndex;
+                    });
+                  },
                 ),
+                borderData: FlBorderData(show: false),
+                sectionsSpace: 1,
+                centerSpaceRadius: chartSize * 0.07,
+                sections: _buildSections(chartSize),
               ),
-              const SizedBox(height: 24),
-              Wrap(
-                spacing: 16,
-                runSpacing: 12,
+            ),
+          ),
+          if (widget.showLegend) ...[  // 根据参数决定是否显示图例
+            const SizedBox(height: 10),
+            SizedBox(
+              width: chartSize * 0.6,
+              child: Wrap(
+                direction: isPortrait ? Axis.vertical : Axis.horizontal,
+                spacing: 10,  // 从 12 减小到 10
+                runSpacing: 6,  // 从 8 减小到 6
                 alignment: WrapAlignment.center,
                 children: _buildLegends(),
               ),
-            ],
-          ),
-        ),
+            ),
+          ],
+        ],
       ),
     );
   }
 
-  List<PieChartSectionData> _buildSections(double chartHeight) {
-    final baseRadius = chartHeight * 0.35; // 基础半径随图表大小变化
+  List<PieChartSectionData> _buildSections(double chartSize) {
+    final baseRadius = chartSize * 0.4;  // 从 0.38 增加到 0.4，使饼图占比更大
     
     return List.generate(widget.counters.length, (i) {
       final counter = widget.counters[i];
       final percentage = counter.count / widget.total;
       final isTouched = i == _touchedIndex;
-      final radius = isTouched ? baseRadius * 1.1 : baseRadius;
-      final fontSize = isTouched ? 14.0 : 12.0;
+      final radius = isTouched ? baseRadius * 1.05 : baseRadius;
+      final fontSize = isTouched ? 12.0 : 10.0;  // 从 13/11 减小到 12/10
 
       return PieChartSectionData(
         color: counter.colorValue,
@@ -107,7 +114,7 @@ class _CounterPieChartState extends State<CounterPieChart> {
           counter.count.toString(),
           counter.colorValue,
         ) : null,
-        badgePositionPercentageOffset: 1.2,
+        badgePositionPercentageOffset: 1.08,  // 从 1.1 减小到 1.08
       );
     });
   }
@@ -115,31 +122,10 @@ class _CounterPieChartState extends State<CounterPieChart> {
   List<Widget> _buildLegends() {
     return widget.counters.map((counter) {
       final percentage = counter.count / widget.total;
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 16,
-            height: 16,
-            decoration: BoxDecoration(
-              color: counter.colorValue,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 4),
-          Text(
-            '${counter.name} (${counter.count})',
-            style: const TextStyle(fontSize: 12),
-          ),
-          const SizedBox(width: 4),
-          Text(
-            '${(percentage * 100).toStringAsFixed(1)}%',
-            style: const TextStyle(
-              fontSize: 12,
-              color: Colors.black54,
-            ),
-          ),
-        ],
+      return _LegendItem(
+        name: counter.name,
+        value: '${counter.count} (${(percentage * 100).toStringAsFixed(1)}%)',
+        color: counter.colorValue,
       );
     }).toList();
   }
@@ -204,5 +190,48 @@ class _Badge extends StatelessWidget {
 
   bool _isColorDark(Color color) {
     return color.computeLuminance() < 0.5;
+  }
+}
+
+class _LegendItem extends StatelessWidget {
+  final String name;
+  final String value;
+  final Color color;
+
+  const _LegendItem({
+    Key? key,
+    required this.name,
+    required this.value,
+    required this.color,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 16,
+          height: 16,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          name,
+          style: const TextStyle(fontSize: 12),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 12,
+            color: Colors.black54,
+          ),
+        ),
+      ],
+    );
   }
 } 

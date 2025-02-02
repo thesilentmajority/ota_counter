@@ -7,15 +7,21 @@ import 'services/database_service.dart';
 import 'services/settings_service.dart';
 import 'widgets/counter_pie_chart.dart';
 import 'services/export_import_service.dart';
+import 'pages/image_page.dart';
+import 'package:flutter/foundation.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'dart:io' show Platform;  // 添加 Platform 导入
+import 'pages/chart_page.dart';
 
 void main() async {
   // 确保 Flutter 绑定初始化
   WidgetsFlutterBinding.ensureInitialized();
   
-  // 初始化 sqflite_ffi
-  sqfliteFfiInit();
-  // 设置数据库工厂
-  databaseFactory = databaseFactoryFfi;
+  // 仅在非 Android 平台初始化 FFI
+  if (!kIsWeb && defaultTargetPlatform != TargetPlatform.android) {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  }
 
   runApp(const MyApp());
 }
@@ -45,7 +51,7 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   final List<CounterModel> _counters = [];
-  double _gridSize = 3;  // 默认大小
+  double _gridSize = 2;  // 修改默认值为2
   bool _sortAscending = true;  // 添加排序方向状态
 
   @override
@@ -63,11 +69,19 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Future<void> _loadCounters() async {
-    final counters = await DatabaseService.getCounters();
-    setState(() {
-      _counters.clear();
-      _counters.addAll(counters);
-    });
+    try {
+      final counters = await DatabaseService.getCounters();
+      setState(() {
+        _counters.clear();
+        _counters.addAll(counters);
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('加载失败: ${e.toString()}')),
+        );
+      }
+    }
   }
 
   int get _total => _counters.fold<int>(0, (sum, counter) => sum + counter.count);
@@ -90,14 +104,22 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Future<void> _addCounter() async {
-    final result = await showDialog<CounterModel>(
-      context: context,
-      builder: (context) => const AddCounterDialog(),
-    );
-    
-    if (result != null) {
-      await DatabaseService.insertCounter(result);
-      await _loadCounters();
+    try {
+      final result = await showDialog<CounterModel>(
+        context: context,
+        builder: (context) => const AddCounterDialog(),
+      );
+      
+      if (result != null) {
+        await DatabaseService.insertCounter(result);
+        await _loadCounters();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('添加失败: ${e.toString()}')),
+        );
+      }
     }
   }
 
@@ -145,43 +167,54 @@ class _MyHomePageState extends State<MyHomePage> {
   void _showGridSizeDialog() {
     showDialog(
       context: context,
+      barrierDismissible: true,
+      useSafeArea: true,
+      useRootNavigator: true,
       builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('调整网格大小'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Slider(
-                value: _gridSize,
-                min: 2,
-                max: 10,
-                divisions: 8,
-                label: _gridSize.round().toString(),
-                onChanged: (value) {
-                  setDialogState(() {
-                    setState(() {
-                      _gridSize = value.roundToDouble();
-                      // 立即保存设置
-                      SettingsService.saveGridSize(_gridSize);
+        builder: (context, setDialogState) => TweenAnimationBuilder(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          tween: Tween<double>(begin: 0.8, end: 1.0),
+          builder: (context, value, child) => Transform.scale(
+            scale: value,
+            child: child,
+          ),
+          child: AlertDialog(
+            title: const Text('调整网格大小'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Slider(
+                  value: _gridSize,
+                  min: 1,     // 从 2 改为 1
+                  max: 5,     // 从 10 改为 5
+                  divisions: 4,  // 从 8 改为 4
+                  label: _gridSize.round().toString(),
+                  onChanged: (value) {
+                    setDialogState(() {
+                      setState(() {
+                        _gridSize = value.roundToDouble();
+                        SettingsService.saveGridSize(_gridSize);
+                      });
                     });
-                  });
-                },
+                  },
+                ),
+                Text('每行显示 ${_gridSize.round()} 个'),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('取消'),
               ),
-              Text('每行显示 ${_gridSize.round()} 个'),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                },
+                child: const Text('确定'),
+              ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('取消'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              child: const Text('确定'),
-            ),
-          ],
         ),
       ),
     );
@@ -197,29 +230,30 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void _showPieChart() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('统计分布'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: CounterPieChart(
-            counters: _counters,
-            total: _total,
-          ),
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ChartPage(
+          counters: _counters,
+          total: _total,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('关闭'),
-          ),
-        ],
       ),
     );
   }
 
   Future<void> _exportData() async {
     try {
+      // 请求存储权限
+      if (Platform.isAndroid) {
+        final status = await Permission.storage.status;
+        if (status.isDenied) {
+          final result = await Permission.storage.request();
+          if (result.isDenied) {
+            throw Exception('需要存储权限才能导出数据');
+          }
+        }
+      }
+
       final path = await ExportImportService.exportData(_counters);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -229,7 +263,7 @@ class _MyHomePageState extends State<MyHomePage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('导出失败')),
+          SnackBar(content: Text('导出失败: ${e.toString()}')),
         );
       }
     }
@@ -285,6 +319,20 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+  // 修改宽高比计算方法
+  double _calculateAspectRatio(double gridSize) {
+    final ratio = switch (gridSize.toInt()) {
+      1 => 0.95,  // 1列
+      2 => 0.85,  // 2列
+      3 => 0.75,  // 3列
+      4 => 0.65,  // 4列
+      5 => 0.55,  // 5列
+      _ => 0.85,  // 默认
+    };
+    
+    return ratio;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -310,6 +358,12 @@ class _MyHomePageState extends State<MyHomePage> {
                   break;
                 case 'chart':
                   _showPieChart();
+                  break;
+                case 'image':
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const ImagePage()),
+                  );
                   break;
               }
             },
@@ -364,6 +418,16 @@ class _MyHomePageState extends State<MyHomePage> {
                   ],
                 ),
               ),
+              const PopupMenuItem(
+                value: 'image',
+                child: Row(
+                  children: [
+                    Icon(Icons.image),
+                    SizedBox(width: 8),
+                    Text('抽取图片'),
+                  ],
+                ),
+              ),
             ],
           ),
         ],
@@ -379,25 +443,37 @@ class _MyHomePageState extends State<MyHomePage> {
             ],
           ),
         ),
-        child: GridView.builder(
-          padding: const EdgeInsets.all(16),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: _gridSize.toInt(),
-            childAspectRatio: 1,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-          ),
-          itemCount: _counters.length,
-          itemBuilder: (context, index) {
-            final counter = _counters[index];
-            return CounterCard(
-              counter: counter,
-              percentage: _getPercentage(counter.count),
-              onTap: () => _incrementCounter(index),
-              onEdit: () => _editCounter(index),
-              onDelete: () => _deleteCounter(index),
-            );
-          },
+        child: CustomScrollView(
+          physics: const BouncingScrollPhysics(),
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.all(16),
+              sliver: SliverGrid(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final counter = _counters[index];
+                    return RepaintBoundary(
+                      child: CounterCard(
+                        key: ValueKey(counter.id),
+                        counter: counter,
+                        percentage: _getPercentage(counter.count),
+                        onTap: () => _incrementCounter(index),
+                        onEdit: () => _editCounter(index),
+                        onDelete: () => _deleteCounter(index),
+                      ),
+                    );
+                  },
+                  childCount: _counters.length,
+                ),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: _gridSize.toInt(),
+                  childAspectRatio: _calculateAspectRatio(_gridSize),
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 16,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
       floatingActionButton: FloatingActionButton(

@@ -1,5 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import 'package:flutter/foundation.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../models/counter_model.dart';
 
 class DatabaseService {
@@ -16,21 +18,49 @@ class DatabaseService {
   }
 
   static Future<Database> _initDatabase() async {
-    final String path = join(await getDatabasesPath(), _dbName);
-    return await openDatabase(
-      path,
-      version: _version,
-      onCreate: (db, version) async {
-        await db.execute('''
-          CREATE TABLE $tableName(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            count INTEGER NOT NULL,
-            color TEXT NOT NULL
-          )
-        ''');
-      },
-    );
+    // 根据平台使用不同的数据库实现
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      // Android 平台
+      final databasesPath = await getDatabasesPath();
+      final path = join(databasesPath, _dbName);
+      
+      return await openDatabase(
+        path,
+        version: _version,
+        onCreate: (db, version) async {
+          await db.execute('''
+            CREATE TABLE $tableName(
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              name TEXT NOT NULL,
+              count INTEGER NOT NULL,
+              color TEXT NOT NULL
+            )
+          ''');
+        },
+      );
+    } else {
+      // Windows 或其他平台
+      sqfliteFfiInit();
+      final databaseFactory = databaseFactoryFfi;
+      final path = join(await getDatabasesPath(), _dbName);
+      
+      return await databaseFactory.openDatabase(
+        path,
+        options: OpenDatabaseOptions(
+          version: _version,
+          onCreate: (db, version) async {
+            await db.execute('''
+              CREATE TABLE $tableName(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                count INTEGER NOT NULL,
+                color TEXT NOT NULL
+              )
+            ''');
+          },
+        ),
+      );
+    }
   }
 
   static Future<List<CounterModel>> getCounters() async {
