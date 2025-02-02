@@ -29,9 +29,9 @@ if (flutterVersionName == null) {
 }
 
 android {
-    namespace "com.leoli.imagepicker"
-    compileSdkVersion 34  // 更新到最新的SDK版本
-    ndkVersion flutter.ndkVersion
+    namespace = "com.miu.ota_counter"
+    compileSdk = flutter.compileSdkVersion
+    ndkVersion = flutter.ndkVersion
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8

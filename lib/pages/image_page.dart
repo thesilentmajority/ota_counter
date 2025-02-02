@@ -157,31 +157,28 @@ class _ImagePageState extends State<ImagePage> {
     try {
       // 检查权限
       if (Platform.isAndroid) {
-        // 检查 Android 版本
         final androidInfo = await DeviceInfoPlugin().androidInfo;
         final sdkInt = androidInfo.version.sdkInt;
         
         if (sdkInt >= 33) {
-          // Android 13 及以上使用 photos 权限
           if (!await Permission.photos.isGranted) {
             final status = await Permission.photos.request();
             if (!status.isGranted) {
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('需要相册权限才能选择图片')),
+                  const SnackBar(content: Text('需要相册权限才能添加图片')),
                 );
               }
               return;
             }
           }
         } else {
-          // Android 13 以下使用 storage 权限
           if (!await Permission.storage.isGranted) {
             final status = await Permission.storage.request();
             if (!status.isGranted) {
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('需要存储权限才能选择图片')),
+                  const SnackBar(content: Text('需要存储权限才能添加图片')),
                 );
               }
               return;
@@ -191,30 +188,65 @@ class _ImagePageState extends State<ImagePage> {
       }
 
       final ImagePicker picker = ImagePicker();
-      final XFile? pickedFile = await picker.pickImage(
-        source: ImageSource.gallery,
+      final List<XFile> pickedFiles = await picker.pickMultiImage(
         maxWidth: 1920,
         maxHeight: 1920,
         imageQuality: 85,
       );
       
-      if (pickedFile == null) return;
+      if (pickedFiles.isEmpty) return;
 
-      final imageFile = File(pickedFile.path);
-      await ImageService.saveImage(imageFile);
+      // 显示进度对话框
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(
+            child: Card(
+              child: Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text('正在添加图片...'),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      }
 
-      // 上传新图片后重新初始化序列
+      // 保存所有图片
+      for (final pickedFile in pickedFiles) {
+        final imageFile = File(pickedFile.path);
+        await ImageService.saveImage(imageFile);
+      }
+
+      // 关闭进度对话框
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+
+      // 重新初始化序列
       await _initImageSequence();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('图片已保存')),
+          SnackBar(
+            content: Text('已添加 ${pickedFiles.length} 张图片'),
+            duration: const Duration(seconds: 2),
+          ),
         );
       }
     } catch (e) {
+      // 确保进度对话框被关闭
       if (mounted) {
+        Navigator.of(context).maybePop();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('上传失败: ${e.toString()}')),
+          SnackBar(content: Text('添加失败: ${e.toString()}')),
         );
       }
     }
@@ -264,7 +296,7 @@ class _ImagePageState extends State<ImagePage> {
           IconButton(
             icon: const Icon(Icons.add_photo_alternate),
             onPressed: _pickImage,
-            tooltip: '上传图片',
+            tooltip: '添加图片',
           ),
           IconButton(
             icon: Icon(_isLocked ? Icons.lock : Icons.lock_open),
