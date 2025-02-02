@@ -11,6 +11,7 @@ import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:io' show Platform;  // 添加 Platform 导入
 import 'pages/chart_page.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 
 void main() async {
   // 确保 Flutter 绑定初始化
@@ -242,23 +243,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Future<void> _exportData() async {
     try {
-      // 请求存储权限
-      if (Platform.isAndroid) {
-        final status = await Permission.storage.status;
-        if (status.isDenied) {
-          final result = await Permission.storage.request();
-          if (result.isDenied) {
-            throw Exception('需要存储权限才能导出数据');
-          }
-        }
-      }
-
-      final path = await ExportImportService.exportData(_counters);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('数据已导出到: $path')),
-        );
-      }
+      await ExportImportService.exportData(_counters);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -3,41 +3,29 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import '../models/counter_model.dart';
 import 'package:path/path.dart' as path;
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 class ExportImportService {
-  static Future<String> exportData(List<CounterModel> counters) async {
+  static Future<void> exportData(List<CounterModel> counters) async {
     final data = counters.map((counter) => counter.toMap()).toList();
     final jsonStr = jsonEncode(data);
     
-    if (Platform.isAndroid) {
-      // 在 Android 上使用下载目录
-      final directory = Directory('/storage/emulated/0/Download');
-      if (!await directory.exists()) {
-        throw Exception('找不到下载目录');
-      }
+    // 创建临时文件
+    final tempDir = await getTemporaryDirectory();
+    final fileName = 'counters_${DateTime.now().millisecondsSinceEpoch}.txt';
+    final tempFile = File('${tempDir.path}/$fileName');
+    await tempFile.writeAsString(jsonStr);
 
-      final fileName = 'counters_${DateTime.now().millisecondsSinceEpoch}.txt';
-      final filePath = path.join(directory.path, fileName);
-      final file = File(filePath);
-      await file.writeAsString(jsonStr);
-      return filePath;
-    } else {
-      // 在其他平台使用文件选择器
-      final result = await FilePicker.platform.saveFile(
-        dialogTitle: '选择保存位置',
-        fileName: 'counters_${DateTime.now().millisecondsSinceEpoch}.txt',
-        type: FileType.custom,
-        allowedExtensions: ['txt'],
-      );
+    // 分享文件
+    await Share.shareXFiles(
+      [XFile(tempFile.path)],
+      subject: '计数器数据导出',
+    );
 
-      if (result == null) {
-        throw Exception('未选择保存位置');
-      }
-
-      final file = File(result);
-      await file.writeAsString(jsonStr);
-      return result;
-    }
+    // 删除临时文件
+    await tempFile.delete();
   }
 
   static Future<List<CounterModel>> importData() async {
