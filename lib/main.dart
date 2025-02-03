@@ -8,10 +8,7 @@ import 'services/settings_service.dart';
 import 'services/export_import_service.dart';
 import 'pages/image_page.dart';
 import 'package:flutter/foundation.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'dart:io' show Platform;  // 添加 Platform 导入
 import 'pages/chart_page.dart';
-import 'package:device_info_plus/device_info_plus.dart';
 
 void main() async {
   // 确保 Flutter 绑定初始化
@@ -51,8 +48,10 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   final List<CounterModel> _counters = [];
-  double _gridSize = 2;  // 修改默认值为2
-  bool _sortAscending = true;  // 添加排序方向状态
+  double _gridSize = 2;
+  bool _sortAscending = true;
+  String _sortType = SettingsService.sortByCount;  // 添加排序类型
+  bool _isLocked = false;
 
   @override
   void initState() {
@@ -63,8 +62,14 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Future<void> _loadSettings() async {
     final size = await SettingsService.getGridSize();
+    final sortDirection = await SettingsService.getSortDirection();
+    final sortType = await SettingsService.getSortType();
+    final isLocked = await SettingsService.getLockState();  // 加载锁定状态
     setState(() {
       _gridSize = size;
+      _sortAscending = sortDirection;
+      _sortType = sortType;
+      _isLocked = isLocked;  // 设置锁定状态
     });
   }
 
@@ -90,7 +95,16 @@ class _MyHomePageState extends State<MyHomePage> {
     return _total == 0 ? 0 : count / _total;
   }
 
+  void _toggleLock() {
+    setState(() {
+      _isLocked = !_isLocked;
+      SettingsService.saveLockState(_isLocked);  // 保存锁定状态
+    });
+  }
+
   void _incrementCounter(int index) async {
+    if (_isLocked) return;  // 如果锁定则不执行计数
+
     final counter = _counters[index];
     final updatedCounter = counter.copyWith(count: counter.count + 1);
     
@@ -222,10 +236,36 @@ class _MyHomePageState extends State<MyHomePage> {
 
   void _sortCounters() {
     setState(() {
-      _sortAscending = !_sortAscending;  // 切换排序方向
-      _counters.sort((a, b) => _sortAscending 
-          ? a.count.compareTo(b.count)
-          : b.count.compareTo(a.count));
+      switch (_sortType) {
+        case SettingsService.sortByCount:
+          _counters.sort((a, b) => _sortAscending
+              ? a.count.compareTo(b.count)
+              : b.count.compareTo(a.count));
+        case SettingsService.sortByName:
+          _counters.sort((a, b) => _sortAscending
+              ? a.name.compareTo(b.name)
+              : b.name.compareTo(a.name));
+        default:
+          _counters.sort((a, b) => _sortAscending
+              ? a.count.compareTo(b.count)
+              : b.count.compareTo(a.count));
+      }
+    });
+  }
+
+  void _toggleSortDirection() {
+    setState(() {
+      _sortAscending = !_sortAscending;
+      SettingsService.saveSortDirection(_sortAscending);
+      _sortCounters();
+    });
+  }
+
+  void _changeSortType(String type) {
+    setState(() {
+      _sortType = type;
+      SettingsService.saveSortType(type);
+      _sortCounters();
     });
   }
 
@@ -324,6 +364,38 @@ class _MyHomePageState extends State<MyHomePage> {
         backgroundColor: Theme.of(context).colorScheme.inversePrimary.withAlpha(204),
         title: Text('总计 $_total'),
         actions: [
+          IconButton(
+            icon: Icon(_sortAscending ? Icons.arrow_upward : Icons.arrow_downward),
+            onPressed: _toggleSortDirection,
+            tooltip: _sortAscending ? '升序' : '降序',
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.sort),
+            tooltip: '排序方式',
+            onSelected: _changeSortType,
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: SettingsService.sortByCount,
+                child: Row(
+                  children: [
+                    Icon(Icons.format_list_numbered),
+                    SizedBox(width: 8),
+                    Text('按数量排序'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: SettingsService.sortByName,
+                child: Row(
+                  children: [
+                    Icon(Icons.sort_by_alpha),
+                    SizedBox(width: 8),
+                    Text('按名称排序'),
+                  ],
+                ),
+              ),
+            ],
+          ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert),
             onSelected: (value) {
@@ -336,9 +408,6 @@ class _MyHomePageState extends State<MyHomePage> {
                   break;
                 case 'grid':
                   _showGridSizeDialog();
-                  break;
-                case 'sort':
-                  _sortCounters();
                   break;
                 case 'chart':
                   _showPieChart();
@@ -379,16 +448,6 @@ class _MyHomePageState extends State<MyHomePage> {
                     Icon(Icons.grid_4x4),
                     SizedBox(width: 8),
                     Text('网格大小'),
-                  ],
-                ),
-              ),
-              PopupMenuItem(
-                value: 'sort',
-                child: Row(
-                  children: [
-                    Icon(_sortAscending ? Icons.arrow_upward : Icons.arrow_downward),
-                    const SizedBox(width: 8),
-                    Text(_sortAscending ? '按数量升序' : '按数量降序'),
                   ],
                 ),
               ),
@@ -444,6 +503,7 @@ class _MyHomePageState extends State<MyHomePage> {
                         onTap: () => _incrementCounter(index),
                         onEdit: () => _editCounter(index),
                         onDelete: () => _deleteCounter(index),
+                        isLocked: _isLocked,  // 传递锁定状态
                       ),
                     );
                   },
@@ -460,9 +520,21 @@ class _MyHomePageState extends State<MyHomePage> {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _addCounter,
+      floatingActionButton: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          FloatingActionButton(
+            onPressed: _toggleLock,
+            heroTag: 'lock',  // 添加 heroTag 避免冲突
+            child: Icon(_isLocked ? Icons.lock : Icons.lock_open),
+          ),
+          const SizedBox(height: 16),  // 按钮之间的间距
+          FloatingActionButton(
+            onPressed: _addCounter,
+            heroTag: 'add',  // 添加 heroTag 避免冲突
         child: const Icon(Icons.add),
+          ),
+        ],
       ),
     );
   }
