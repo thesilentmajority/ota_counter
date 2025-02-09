@@ -11,6 +11,7 @@ class SettingsService {
   static const String sortByCount = 'count';
   static const String sortByName = 'name';
   static const String sortByCreated = 'created';
+  static const String sortByColor = 'color';
 
   static Future<void> saveGridSize(double size) async {
     final prefs = await SharedPreferences.getInstance();

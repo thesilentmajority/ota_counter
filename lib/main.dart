@@ -243,8 +243,23 @@ class _MyHomePageState extends State<MyHomePage> {
               : b.count.compareTo(a.count));
         case SettingsService.sortByName:
           _counters.sort((a, b) => _sortAscending
-              ? a.name.compareTo(b.name)
-              : b.name.compareTo(a.name));
+              ? a.namePinyin.compareTo(b.namePinyin)
+              : b.namePinyin.compareTo(a.namePinyin));
+        case SettingsService.sortByColor:
+          _counters.sort((a, b) {
+            final aHsv = a.hsvColor;
+            final bHsv = b.hsvColor;
+            // 首先按色相排序
+            final hueCompare = aHsv.hue.compareTo(bHsv.hue);
+            if (hueCompare != 0) return _sortAscending ? hueCompare : -hueCompare;
+            // 色相相同时按饱和度排序
+            final satCompare = aHsv.saturation.compareTo(bHsv.saturation);
+            if (satCompare != 0) return _sortAscending ? satCompare : -satCompare;
+            // 最后按明度排序
+            return _sortAscending
+                ? aHsv.value.compareTo(bHsv.value)
+                : bHsv.value.compareTo(aHsv.value);
+          });
         default:
           _counters.sort((a, b) => _sortAscending
               ? a.count.compareTo(b.count)
@@ -391,6 +406,16 @@ class _MyHomePageState extends State<MyHomePage> {
                     Icon(Icons.sort_by_alpha),
                     SizedBox(width: 8),
                     Text('按名称排序'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: SettingsService.sortByColor,
+                child: Row(
+                  children: [
+                    Icon(Icons.palette),
+                    SizedBox(width: 8),
+                    Text('按颜色排序'),
                   ],
                 ),
               ),

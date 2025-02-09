@@ -1,17 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:lpinyin/lpinyin.dart';
 
 class CounterModel {
   final int? id;
   final String name;
   final int count;
   final String color;
+  final String namePinyin;
 
-  const CounterModel({
+  CounterModel({
     this.id,
     required this.name,
     required this.count,
     required this.color,
-  });
+  }) : namePinyin = PinyinHelper.getPinyinE(
+        name, 
+        defPinyin: '#', 
+        format: PinyinFormat.WITHOUT_TONE,
+      );
 
   CounterModel copyWith({
     int? id,
@@ -55,5 +61,9 @@ class CounterModel {
       count: map['count'] as int,
       color: map['color'] as String,
     );
+  }
+
+  HSVColor get hsvColor {
+    return HSVColor.fromColor(colorValue);
   }
 } 
